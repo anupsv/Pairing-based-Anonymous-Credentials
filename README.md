@@ -15,10 +15,11 @@ The system is built on pairing-based cryptography using BLS12-381 curves from th
 
 ## Core Cryptographic Building Blocks
 
-1. **Dual Pedersen Commitments**:
+1. **Dual Pedersen Commitments with Trusted Setup**:
    - Commitments in both G1 and G2 groups: (cm = g^r · ∏ᵢ hᵢ^mᵢ, cm̃ = g̃^r · ∏ᵢ h̃ᵢ^mᵢ)
-   - The attribute generators hᵢ, h̃ᵢ are related to the issuer's secret key (hᵢ = g^yᵢ, h̃ᵢ = g̃^yᵢ)
-   - This relationship is crucial for signature verification
+   - The attribute generators hᵢ, h̃ᵢ come from a structured reference string (SRS) created through a trusted setup
+   - This procedure ensures that no party (including the issuer) knows the discrete logarithm relationships between generators
+   - Similar to zk-SNARK deployments, the SRS consists of powers of a secret value α: [g, g^α, g^(α^2), ...]
 
 2. **Pointcheval-Sanders Signatures**:
    - Issuer holds secret key (x, y⃗) and publishes verification key (X̃ = g̃ˣ, Ỹ)
@@ -34,8 +35,12 @@ The system is built on pairing-based cryptography using BLS12-381 curves from th
 ## Usage Example
 
 ```rust
-// Setup phase
-let domain_params = setup();
+// Setup phase with trusted parameters
+let trusted_setup_path = "./trusted_setup.params";
+let domain_params = setup_with_trusted_params(trusted_setup_path, 10)?;
+
+// Or use the default setup which handles the trusted setup for you
+// let domain_params = setup();
 
 // Issuer setup
 let num_attributes = 2;
@@ -44,12 +49,12 @@ let (issuer_sk, issuer_pk) = (issuer_keys.0.clone(), issuer_keys.1.clone());
 
 // User attributes
 let mut rng = StdRng::from_rng(thread_rng()).unwrap();
-let attr1 = Fr::rand(&mut rng);  // First attribute
+let attr1 = Fr::rand(&mut rng);  // First attribute 
 let attr2 = Fr::rand(&mut rng);  // Second attribute
 let attributes = vec![attr1, attr2];
 let randomness = Fr::rand(&mut rng);
 
-// Create commitment to attributes
+// Create commitment to attributes using the trusted generators
 let commitment = dual_commit(&domain_params, &issuer_keys, &attributes, &randomness);
 
 // Issue credential
@@ -91,14 +96,32 @@ cargo test
 
 ## Security Notes
 
-> **WARNING**: This code is NOT audited, has NOT undergone security review, and should NOT be used in production environments. This implementation is meant strictly for educational purposes only.
+> **WARNING**: This code has NOT undergone security review or auditing, and should NOT be used in production environments without further analysis. This implementation is meant primarily for educational purposes.
 
-- This implementation uses BLS12-381 elliptic curve pairings via the Arkworks library
-- The commitment generators are derived from the issuer's secret key, ensuring the right relationship for verification
-- The implementation follows the mathematical structure described in the blog post
-- Many security considerations beyond basic correctness have not been addressed, including:
-  - Side-channel protections
-  - Secure key management
+### Security Features
+
+1. **Trusted Setup for Attribute Generators**: 
+   - The implementation now includes a proper trusted setup procedure for the attribute generators
+   - This ensures that no party (including the issuer) knows the discrete logarithm relationships between generators
+   - The structured reference string (SRS) follows a similar approach to zk-SNARK deployments
+
+2. **Simulation of MPC Ceremony**:
+   - The trusted setup simulates a multi-party computation (MPC) ceremony by generating and then "discarding" the toxic waste (α)
+   - In a production system, a real MPC protocol would be used with multiple participants
+
+### Remaining Security Considerations
+
+1. **Implementation Focuses on Functionality, Not Complete Security**:
+   - Limited protection against side-channel attacks
+   - Basic key management
+   - Simplified hash-to-curve implementations
+   - Limited input validation and error handling
+
+2. **Educational Trade-offs**:
+   - Several optimizations and security checks are omitted for clarity
+   - The trusted setup is simulated rather than performed through a real MPC ceremony
+
+This implementation is primarily an educational tool to understand the mathematical structure of re-randomizable credentials with proper security properties, but would need additional hardening for production use.
 
 ## License
 

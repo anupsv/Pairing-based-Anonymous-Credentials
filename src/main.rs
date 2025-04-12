@@ -1,17 +1,36 @@
 use anonymous_creds::{
-    setup, keygen, dual_commit, issue, rerand, verify
+    setup, setup_with_trusted_params, keygen, dual_commit, issue, rerand, verify
 };
 use ark_bls12_381::Fr;
 use ark_std::{UniformRand, rand::SeedableRng};
 use rand::{thread_rng, rngs::StdRng};
+use std::fs;
 
 fn main() {
     println!("Re-randomizable Credentials Demo");
     println!("================================");
     
-    // Setup phase
+    // Setup phase with trusted setup
     println!("\n[1] Setting up domain parameters...");
-    let domain_params = setup();
+    println!("    Using trusted setup for secure attribute generators");
+    
+    // Define a path for the trusted setup file
+    let trusted_setup_path = "./demo_trusted_setup.params";
+    
+    // For demo purposes, we'll always generate a fresh setup
+    let _ = fs::remove_file(trusted_setup_path);
+    
+    // Create domain parameters with a trusted setup
+    let domain_params = match setup_with_trusted_params(trusted_setup_path, 5) {
+        Ok(params) => {
+            println!("    Created new trusted setup at: {}", trusted_setup_path);
+            params
+        },
+        Err(e) => {
+            println!("    Failed to create trusted setup: {}. Using default.", e);
+            setup() // Fallback to default setup
+        }
+    };
     
     // Issuer setup
     println!("\n[2] Generating issuer keys...");
@@ -19,12 +38,14 @@ fn main() {
     let issuer_keys = keygen(&domain_params, num_attributes);
     let (issuer_sk, issuer_pk) = (issuer_keys.0.clone(), issuer_keys.1.clone());
     println!("    Issuer keys generated for {} attributes", num_attributes);
+    println!("    The attribute generators are from the trusted setup - not known to the issuer");
     
     // User attributes
     println!("\n[3] Creating user attributes...");
     let mut rng = StdRng::from_rng(thread_rng()).unwrap();
     
     // For demonstration purposes, we'll create random attributes
+    // In a real system, these might be things like age, membership level, etc.
     let attr1 = Fr::rand(&mut rng);
     let attr2 = Fr::rand(&mut rng);
     let attributes = vec![attr1, attr2];
@@ -36,6 +57,7 @@ fn main() {
     
     // Create commitment
     println!("\n[4] Creating commitment to attributes...");
+    println!("    Using secure attribute generators from trusted setup");
     let commitment = dual_commit(&domain_params, &issuer_keys, &attributes, &randomness);
     
     // Issue credential
@@ -71,4 +93,7 @@ fn main() {
     } else {
         println!("    Error: Re-randomization did not change the signature!");
     }
+    
+    // Clean up the demo trusted setup file
+    let _ = fs::remove_file(trusted_setup_path);
 }
